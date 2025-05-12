@@ -1,0 +1,83 @@
+import socket
+
+HOST = '127.0.0.1'
+PORT = 5000
+
+
+def run_server():
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        s.bind((HOST, PORT))
+        s.listen()
+        print(f"✅ Server listening on {HOST}:{PORT}")
+
+        while True:
+            try:
+                conn, addr = s.accept()
+                with conn:
+                    print(f"📥 Connected by {addr}")
+                    conn.sendall(b"Hello from server!")
+                    # 연결 유지 확인용 (optionally receive)
+                    # data = conn.recv(1024)
+                    # if not data:
+                    #     break
+            except KeyboardInterrupt:
+                print("🔴 Server shutting down (Ctrl+C).")
+                break
+            except Exception as e:
+                print(f"⚠️ Error: {e}")
+
+
+if __name__ == "__main__":
+    run_server()
+
+
+##################
+
+import socket
+import time
+
+HOST = '127.0.0.1'
+PORT = 5000
+SRC_PORT = 40000
+MAX_RETRY = 5
+
+def safe_connect():
+    attempt = 0
+    while attempt < MAX_RETRY:
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+
+            # macOS에서는 이 줄도 필요할 수 있음
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+
+            s.bind((HOST, SRC_PORT))
+            s.connect((HOST, PORT))
+            return s  # 연결 성공
+        except OSError as e:
+            print(f"Attempt {attempt + 1}: {e}")
+            attempt += 1
+            time.sleep(0.5)  # 짧게 기다린 후 재시도
+    raise RuntimeError("Failed to connect after retries")
+
+def main():
+    print("▶ First connection")
+    s1 = safe_connect()
+    data = s1.recv(1024)
+    print(f"Received: {data.decode()}")
+    s1.close()
+    print("Closed first connection.\n")
+
+    print("▶ Second connection (may trigger Challenge ACK)")
+    time.sleep(0.05)  # 바로 연결 시도
+    try:
+        s2 = safe_connect()
+        data2 = s2.recv(1024)
+        print(f"Second received: {data2.decode()}")
+        s2.close()
+    except Exception as e:
+        print(f"Second connection failed: {e}")
+
+if __name__ == "__main__":
+    main()
